@@ -22,6 +22,7 @@ export default function VoiceRecorder() {
   const recognitionRef = useRef<any>(null);
   const currentMessageId = useRef<string | null>(null);
   const manualStopRef = useRef(false);
+  const finalTranscriptRef = useRef<string>("");
 
   useEffect(() => {
     const SpeechRecognition =
@@ -29,7 +30,6 @@ export default function VoiceRecorder() {
 
     if (!SpeechRecognition) {
       Promise.resolve().then(() => setSupported(false));
-      return;
     }
   }, []);
 
@@ -52,6 +52,8 @@ export default function VoiceRecorder() {
 
     const id = uuidv4();
     currentMessageId.current = id;
+    finalTranscriptRef.current = "";
+
     dispatch(addMessage({ id, role: "user", text: "", loading: false }));
 
     rec.onstart = () => {
@@ -69,16 +71,19 @@ export default function VoiceRecorder() {
           updateMessageText({ id: currentMessageId.current, text: transcript })
         );
       }
+
+      if (e.results[e.results.length - 1].isFinal) {
+        finalTranscriptRef.current = transcript;
+      }
     };
 
     rec.onend = async () => {
       dispatch(setRecording(false));
 
-      // Если остановка была вручную — отправляем текст на сервер
+      // Ручная остановка
       if (manualStopRef.current && currentMessageId.current) {
         const id = currentMessageId.current;
-        const element =
-          document.querySelector(`#message-${id}`)?.textContent || "";
+        const textToSend = finalTranscriptRef.current || "";
 
         dispatch(setMessageLoading({ id, loading: true }));
 
@@ -86,7 +91,7 @@ export default function VoiceRecorder() {
           const res = await fetch("/api/ai/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: element }),
+            body: JSON.stringify({ text: textToSend }),
           });
           const data = await res.json();
 
@@ -111,10 +116,11 @@ export default function VoiceRecorder() {
         }
 
         currentMessageId.current = null;
+        finalTranscriptRef.current = "";
         return;
       }
 
-      // Если остановка автоматическая (пауза речи) — перезапускаем
+      // Автоматическая пауза — перезапуск
       if (!manualStopRef.current) {
         rec.start();
       }
