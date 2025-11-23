@@ -17,7 +17,7 @@ export default function ChatWindow() {
             className="inline-block p-2 rounded-md"
             style={{ background: m.role === "user" ? "#e6f7ff" : "#f1f1f1" }}
           >
-            <div className="text-sm">{m.text}</div>
+            <div className="text-sm text-black">{m.text}</div>
             {m.loading && (
               <div className="text-xs text-gray-500">...загрузка</div>
             )}

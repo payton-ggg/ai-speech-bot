@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { useDispatch } from "react-redux";
 import {
   addMessage,
@@ -18,18 +18,21 @@ declare global {
 
 export default function VoiceRecorder() {
   const dispatch = useDispatch();
-  const [supported, setSupported] = useState(true);
   const recognitionRef = useRef<any>(null);
   const currentMessageId = useRef<string | null>(null);
+  const [supported, setSupported] = useState(true);
 
-  useEffect(() => {
+  const startRecording = () => {
+    // Создаём экземпляр ТОЛЬКО при клике
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
+
     if (!SpeechRecognition) {
-      // defer setState to next tick to avoid cascading renders
-      Promise.resolve().then(() => setSupported(false));
+      setSupported(false);
+      alert("SpeechRecognition не доступен. В Brave отключите Shields.");
       return;
     }
+
     const rec = new SpeechRecognition();
     rec.lang = "ru-RU";
     rec.interimResults = true;
@@ -38,24 +41,24 @@ export default function VoiceRecorder() {
     rec.onstart = () => {
       dispatch(setRecording(true));
     };
-    rec.onend = () => {
-      dispatch(setRecording(false));
-      recognitionRef.current = null;
-    };
+
     rec.onresult = (e: any) => {
       let transcript = "";
       for (let i = 0; i < e.results.length; i++) {
         transcript += e.results[i][0].transcript;
       }
+
       if (currentMessageId.current) {
         dispatch(
           updateMessageText({ id: currentMessageId.current, text: transcript })
         );
       }
+
+      // FINAL RESULT
       if (e.results[e.results.length - 1].isFinal) {
-        // final: send to server
         const id = currentMessageId.current!;
         dispatch(setMessageLoading({ id, loading: true }));
+
         fetch("/api/ai/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -64,23 +67,13 @@ export default function VoiceRecorder() {
           .then((r) => r.json())
           .then((data) => {
             dispatch(setMessageLoading({ id, loading: false }));
-            if (data?.reply) {
-              dispatch(
-                addMessage({
-                  id: `${id}-reply`,
-                  role: "assistant",
-                  text: data.reply,
-                })
-              );
-            } else {
-              dispatch(
-                addMessage({
-                  id: `${id}-reply`,
-                  role: "assistant",
-                  text: "Ошибка: пустой ответ от модели",
-                })
-              );
-            }
+            dispatch(
+              addMessage({
+                id: `${id}-reply`,
+                role: "assistant",
+                text: data?.reply || "Ошибка: пустой ответ от модели",
+              })
+            );
           })
           .catch((err) => {
             dispatch(setMessageLoading({ id, loading: false }));
@@ -93,34 +86,39 @@ export default function VoiceRecorder() {
             );
             console.error(err);
           });
+
         currentMessageId.current = null;
       }
     };
 
-    recognitionRef.current = rec;
-  }, [dispatch]);
+    rec.onerror = (event: any) => {
+      console.error("SpeechRecognition error:", event.error);
+    };
 
-  const startRecording = () => {
-    if (!recognitionRef.current) {
-      alert("SpeechRecognition не доступен в этом браузере.");
-      return;
-    }
+    rec.onend = () => {
+      dispatch(setRecording(false));
+      // НЕ обнуляем recognitionRef — это ломает повторный старт
+    };
+
+    recognitionRef.current = rec;
+
+    // Создаём новое сообщение
     const id = uuidv4();
     currentMessageId.current = id;
     dispatch(addMessage({ id, role: "user", text: "", loading: false }));
-    recognitionRef.current.start();
+
+    rec.start();
   };
 
   const stopRecording = () => {
-    if (recognitionRef.current) recognitionRef.current.stop();
+    recognitionRef.current?.stop();
   };
 
   return (
     <div>
       {!supported && (
-        <div className="text-red-600 mb-2">
-          Ваш браузер не поддерживает Web Speech API. Используйте
-          Chrome/Chromium.
+        <div className="text-red-500 mb-2">
+          Ваш браузер блокирует Web Speech API. Отключите Brave Shields.
         </div>
       )}
       <div className="flex gap-2">
