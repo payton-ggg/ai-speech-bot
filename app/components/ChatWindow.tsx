@@ -13,20 +13,19 @@ export default function ChatWindow() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Проигрывание аудио через fetch к API Google TTS
   const playAudio = async (text: string) => {
-    if (!text) return;
-
     const response = await fetch("/api/ai/tts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
     });
 
-    const blob = await response.blob();
+    const arrayBuffer = await response.arrayBuffer();
+    const blob = new Blob([arrayBuffer], { type: "audio/mpeg" }); // <- mp3
     const url = URL.createObjectURL(blob);
+
     const audio = new Audio(url);
-    audio.play();
+    audio.play().catch((err) => console.error("Ошибка воспроизведения:", err));
   };
 
   // Автоозвучка сообщений ассистента

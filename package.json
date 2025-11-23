@@ -12,6 +12,7 @@
     "@google-cloud/speech": "^7.2.1",
     "@google/genai": "^1.30.0",
     "@reduxjs/toolkit": "^2.10.1",
+    "ffmpeg-static": "^5.3.0",
     "multiparty": "^4.2.3",
     "next": "16.0.3",
     "react": "19.2.0",
